@@ -20,5 +20,6 @@ def create_app(config_object=None):
 
     from app.routes.health_routes import health_bp
     app.register_blueprint(health_bp, url_prefix="/api/v1")
-
+    from app.errors import register_error_handlers
+    register_error_handlers(app)
     return app
