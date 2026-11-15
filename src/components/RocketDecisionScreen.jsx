@@ -49,24 +49,13 @@ export function RocketDecisionScreen({
       {/* Futuristic Cockpit Scanlines Effect */}
       <div className="absolute inset-0 scanlines pointer-events-none z-10 opacity-30" />
 
-      {/* LEFT TELEMETRY HUD: CRISP MOON TARGET PANEL (Frozen Position & Strict Locked Size: 278px width, 250px height) */}
-      <div
-        className="absolute z-20 pointer-events-auto transform-none"
-        style={{ left: '3.6%', top: '38.9%' }}
-      >
+      {/* LEFT TELEMETRY HUD: CRISP MOON TARGET PANEL (Exact size of older card: 278px width, 250px height) */}
+      <div className="absolute left-[3.6%] top-[38.9%] z-20 pointer-events-auto">
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            width: '278px',
-            height: '250px',
-            minWidth: '278px',
-            maxWidth: '278px',
-            minHeight: '250px',
-            maxHeight: '250px',
-          }}
-          className="p-2.5 rounded-xl border border-cyan-400/70 bg-[#060B1E]/95 backdrop-blur-md shadow-[0_0_25px_rgba(0,240,255,0.25)] cursor-default select-none flex flex-col justify-between overflow-hidden shrink-0 grow-0 flex-none"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-[278px] h-[250px] p-2.5 rounded-xl border border-cyan-400/70 bg-[#060B1E]/95 backdrop-blur-md shadow-[0_0_25px_rgba(0,240,255,0.25)] cursor-default select-none flex flex-col justify-between overflow-hidden"
         >
           {/* Top Header & Telemetry Data */}
           <div>
@@ -83,8 +72,8 @@ export function RocketDecisionScreen({
             {/* Destination Title & Distance */}
             <div className="font-mono text-left leading-tight">
               <div className="text-[15.5px] font-bold text-white tracking-wide">
-                <br />
-                DESTINATION A:
+                <br>
+                </br>DESTINATION A:
               </div>
               <div className="text-[12.5px] font-bold text-cyan-400 tracking-wide">
                 MOON (384,400 KM)
@@ -94,8 +83,8 @@ export function RocketDecisionScreen({
             {/* Equipment / Exploration Highlights Bullet List */}
             <div className="text-[13.5px] font-mono text-slate-300 space-y-0.5 mt-1 leading-tight text-left">
               <div className="flex items-start space-x-1">
-                <span className="text-cyan-400 font-bold"><br />•</span>
-                <span><br />Apollo 11 Descent Stage</span>
+                <span className="text-cyan-400 font-bold"><br></br>•</span>
+                <span><br></br>Apollo 11 Descent Stage</span>
               </div>
               <div className="flex items-start space-x-1">
                 <span className="text-cyan-400 font-bold">•</span>
@@ -125,24 +114,13 @@ export function RocketDecisionScreen({
         </motion.div>
       </div>
 
-      {/* RIGHT TELEMETRY HUD: CRISP MARS TARGET PANEL (Frozen Position & Strict Locked Size: 285px width, 250px height) */}
-      <div
-        className="absolute z-20 pointer-events-auto transform-none"
-        style={{ right: '3.1%', top: '38.9%' }}
-      >
+      {/* RIGHT TELEMETRY HUD: CRISP MARS TARGET PANEL (All Right-Aligned, width increased by 20%) */}
+      <div className="absolute right-[3.1%] top-[38.9%] z-20 pointer-events-auto">
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            width: '285px',
-            height: '250px',
-            minWidth: '285px',
-            maxWidth: '285px',
-            minHeight: '250px',
-            maxHeight: '250px',
-          }}
-          className="p-2.5 rounded-xl border border-amber-500/70 bg-[#180806]/95 backdrop-blur-md shadow-[0_0_25px_rgba(245,158,11,0.25)] cursor-default select-none flex flex-col justify-between overflow-hidden shrink-0 grow-0 flex-none"
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-[285px] h-[250px] p-2.5 sm:p-3 rounded-xl border border-amber-500/70 bg-[#180806]/95 backdrop-blur-md shadow-[0_0_25px_rgba(245,158,11,0.25)] cursor-default select-none flex flex-col justify-between overflow-hidden"
         >
           {/* Top Header & Telemetry Data */}
           <div>
@@ -159,7 +137,7 @@ export function RocketDecisionScreen({
             {/* Destination Title & Distance (Right-Aligned) */}
             <div className="font-mono text-left leading-tight pr-1">
               <div className="text-[15.5px] font-bold text-white tracking-wide">
-                <br />DESTINATION B:
+                <br></br>DESTINATION B:
               </div>
               <div className="text-[12.5px] font-bold text-amber-400 tracking-wide mt-0.5">
                 MARS (54.6M KM)
@@ -169,7 +147,7 @@ export function RocketDecisionScreen({
             {/* Equipment / Exploration Highlights Bullet List (All Right-Aligned) */}
             <div className="text-[13.5px] font-mono text-slate-300 space-y-1 mt-2 leading-tight text-left pr-1">
               <div>
-                <span className="text-amber-400 font-bold mr-1.5"><br />•</span>
+                <span className="text-amber-400 font-bold mr-1.5"><br></br>•</span>
                 <span>Sojourner &amp; Opportunity</span>
               </div>
               <div>
