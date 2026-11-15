@@ -13,6 +13,7 @@ def create_app(config_object=None):
 
     db.init_app(app)
     migrate.init_app(app, db)
+    from app import models  # noqa: F401  (imported so migrations can see the models)
     cors.init_app(
         app,
         resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}},
