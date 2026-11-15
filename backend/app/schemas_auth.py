@@ -16,7 +16,7 @@ class RegisterSchema(Schema):
     )
     password = fields.Str(required=True, validate=validate.Length(min=8, max=128))
     grade_band = fields.Str(data_key="gradeBand", load_default=None, allow_none=True,
-                            validate=validate.Length(max=20))
+                            validate=validate.Length(max=40))
     country = fields.Str(load_default=None, allow_none=True, validate=validate.Length(max=60))
     parent_email = fields.Str(data_key="parentEmail", load_default=None, allow_none=True,
                               validate=[validate.Length(max=254), validate.Email()])

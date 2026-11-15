@@ -32,7 +32,7 @@ GAME_XP_REWARDS = {
     "lunar-rover": 250,
     "alsep-science": 250,
     "ingenuity-flight": 300,
-    "mars-rover": 260,
+    "mars-rover": 300,
     "insight-seismic": 250,
     "kepler-transit": 280,
 }

@@ -51,7 +51,7 @@ No token needed. Response `200`: `[{"id": "lunar-rover", "xpReward": 250, "repla
 ### POST /games/{gameId}/submit
 Token required.
 Body: `{"score": 120}` (integer, optional). XP does not depend on score.
-Response `200`: `{"xpAwarded": 260, "newBadges": [...], "progress": {...}}`
+Response `200`: `{"xpAwarded": 300, "newBadges": [...], "progress": {...}}`
 First completion earns the full reward. Replays earn 30.
 Unknown game: `404`. Bad score: `422`.
 
@@ -106,7 +106,7 @@ Story id = object id.
 
 ## XP rules
 
-Discovery 50. Story 100. Game: first completion = its reward (250/250/300/260/250/280), replay 30.
+Discovery 50. Story 100. Game: first completion = its reward (250/250/300/300/250/280), replay 30.
 Ranks start at 0, 150, 350, 600, 900, 1300 XP.
 
 ## Frontend must keep working if the server is down
@@ -119,7 +119,7 @@ Fall back to localStorage. Free hosts can take up to a minute to wake up.
 2. Nothing in the frontend awards `space-archaeologist`. The server awards it when all 13 stories are complete. Agree?
 3. `GameModal.jsx` adds a client-side bonus to XP. The server ignores it. Show `xpAwarded` instead.
 4. `ArtifactDetailScreen.jsx` says "+200 XP". The real game rewards are 250 to 300.
-5. Grade band: the server accepts any text up to 20 characters. Send the same values the signup form shows.
+5. Grade band: the server accepts any text up to 40 characters. Send the same values the signup form shows.
 6. Story completion currently fires when a game is launched. It should fire when the story is finished.
 
 ## Known limitations

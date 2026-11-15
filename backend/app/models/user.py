@@ -8,7 +8,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(30), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    grade_band = db.Column(db.String(20))
+    grade_band = db.Column(db.String(40))
     country = db.Column(db.String(60))
     parent_email = db.Column(db.String(254))
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)

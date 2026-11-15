@@ -13,11 +13,11 @@ Stack: Python 3.11, Flask 3, SQLAlchemy 2, Flask-Migrate (Alembic), MySQL, marsh
     .\venv\Scripts\Activate.ps1
     python -m pip install -r requirements.txt
 
-Create the database and a least-privilege MySQL user (run in the mysql client as an admin):
+Create the database and a MySQL user (run in the mysql client as an admin). ALL PRIVILEGES on this one database keeps local setup simple; a production deployment should use narrower grants (SELECT, INSERT, UPDATE, DELETE, and schema privileges only for the account that runs migrations):
 
     CREATE DATABASE abnf_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     CREATE USER 'abnf_user'@'localhost' IDENTIFIED BY 'choose-a-password';
-    GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
+    GRANT ALL PRIVILEGES
         ON abnf_db.* TO 'abnf_user'@'localhost';
 
 Copy `.env.example` to `.env` and fill in the values. `.env` is git-ignored and must never be committed.
