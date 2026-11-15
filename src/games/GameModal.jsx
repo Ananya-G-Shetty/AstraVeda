@@ -32,6 +32,9 @@ import {
   Volume2,
   VolumeX,
   BookOpen,
+  Satellite,
+  Target,
+  Send,
 } from 'lucide-react';
 
 export function GameModal({ gameId, onClose, onGameComplete }) {
@@ -1096,11 +1099,13 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
   const [altitude, setAltitude] = useState(3.0); // 0 to 12 meters
   const [posX, setPosX] = useState(15); // 10% to 90%
   const [rotorRPM, setRotorRPM] = useState(2500);
-  const [battery, setBattery] = useState(100);
   const [gateIndex, setGateIndex] = useState(0);
   const [crosswind, setCrosswind] = useState(0); // -1.5 to +1.5
   const [dustDevilActive, setDustDevilActive] = useState(false);
   const [whiteoutActive, setWhiteoutActive] = useState(false);
+
+  // 2-Minute Flight Window Time Limit (120 seconds)
+  const [timeLeft, setTimeLeft] = useState(120);
 
   const waypoints = [
     { id: 1, x: 28, altMin: 3.5, altMax: 7.0, label: 'Gate 1: Wright Airfield' },
@@ -1109,6 +1114,22 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
     { id: 4, x: 76, altMin: 5.0, altMax: 9.0, label: 'Gate 4: Belva Crater' },
     { id: 5, x: 88, altMin: 1.5, altMax: 4.5, label: 'Gate 5: Touchdown Pad B' },
   ];
+
+  // 2-Minute Countdown Timer Loop (Game is governed by time limit)
+  useEffect(() => {
+    const clockInterval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(clockInterval);
+          onLose("MISSION TIME EXPIRED! The 2-minute flight window closed. Relaunch Ingenuity to complete all 5 waypoints within the time limit.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(clockInterval);
+  }, [onLose]);
 
   // Random wind gusts and distractions loop
   useEffect(() => {
@@ -1138,30 +1159,15 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
     const timer = setInterval(() => {
       // Gravity pulls down in thin atmosphere
       setAltitude((alt) => {
-        let pull = 0.35;
-        if (dustDevilActive) pull += (Math.random() - 0.5) * 1.2; // violent turbulence
+        let pull = 0.32;
+        if (dustDevilActive) pull += (Math.random() - 0.5) * 1.1; // violent turbulence
+        // Touch down safely on baseline (0m) without aborting!
         const nextAlt = Math.max(0, alt - pull);
-
-        // Crash check
-        if (nextAlt <= 0.2 && gateIndex < waypoints.length - 1) {
-          clearInterval(timer);
-          onLose("CRASHED ON MARTIAN SURFACE! Rotor blades struck crater boulders. Maintain altitude in the safe green corridor!");
-        }
         return nextAlt;
       });
 
       // Crosswind pushes helicopter
       setPosX((x) => Math.min(92, Math.max(8, x + crosswind * 0.35)));
-
-      // Battery consumption
-      setBattery((b) => {
-        if (b <= 1) {
-          clearInterval(timer);
-          onLose("Rotor battery depleted in thin air! Increase forward flight speed to clear gates before power drops.");
-          return 0;
-        }
-        return b - 0.22;
-      });
 
       // Waypoint passage check
       const currentGate = waypoints[gateIndex];
@@ -1181,7 +1187,7 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
     }, 120);
 
     return () => clearInterval(timer);
-  }, [posX, altitude, gateIndex, crosswind, dustDevilActive]);
+  }, [posX, altitude, gateIndex, crosswind, dustDevilActive, onWin]);
 
   const handleThrust = () => {
     sound.playRotorBoost();
@@ -1194,28 +1200,50 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
     setPosX((x) => Math.min(92, Math.max(8, x + dx)));
   };
 
+  // Keyboard navigation controls for desktop
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'ArrowUp' || e.code === 'Space') {
+        e.preventDefault();
+        handleThrust();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        handleTilt(-7);
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        handleTilt(7);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const batteryPercent = Math.max(0, Math.floor((timeLeft / 120) * 100));
+
   return (
     <div className="space-y-3 h-full flex flex-col justify-between">
       {/* Telemetry Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs font-mono bg-slate-900/90 p-3 rounded-xl border border-slate-700 text-center shrink-0">
         <div>
-          <span className="text-slate-400 block text-[10px]">ALTITUDE (RADAR)</span>
-          <span className="text-cyan-400 font-bold">{altitude.toFixed(1)}m</span>
-        </div>
-        <div>
-          <span className="text-slate-400 block text-[10px]">TWIN ROTOR SPEED</span>
-          <span className="text-emerald-400 font-bold">{rotorRPM} RPM</span>
-        </div>
-        <div>
-          <span className="text-slate-400 block text-[10px]">CROSSWIND SHEAR</span>
-          <span className={`font-bold ${Math.abs(crosswind) > 1.0 ? 'text-amber-400 animate-pulse' : 'text-slate-300'}`}>
-            {crosswind > 0 ? `+${crosswind.toFixed(1)} m/s ▶` : `${crosswind.toFixed(1)} m/s ◀`}
+          <span className="text-slate-400 block text-[10px]">MISSION CLOCK (2 MIN)</span>
+          <span className={`font-bold font-mono ${timeLeft < 25 ? 'text-rose-400 animate-pulse' : timeLeft < 50 ? 'text-amber-400' : 'text-emerald-300'}`}>
+            ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
         </div>
         <div>
+          <span className="text-slate-400 block text-[10px]">ALTITUDE (RADAR)</span>
+          <span className={`font-bold ${altitude === 0 ? 'text-amber-400' : 'text-cyan-400'}`}>
+            {altitude === 0 ? '0.0m [BASELINE]' : `${altitude.toFixed(1)}m`}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-400 block text-[10px]">TWIN ROTOR SPEED</span>
+          <span className="text-emerald-400 font-bold">{altitude === 0 ? '2000 RPM (IDLE)' : `${rotorRPM} RPM`}</span>
+        </div>
+        <div>
           <span className="text-slate-400 block text-[10px]">FLIGHT BATTERY</span>
-          <span className={`font-bold ${battery < 25 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`}>
-            🔋 {Math.floor(battery)}%
+          <span className={`font-bold ${batteryPercent < 25 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`}>
+            🔋 {batteryPercent}%
           </span>
         </div>
         <div>
@@ -1226,6 +1254,17 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
 
       {/* Flight Canvas Viewport */}
       <div className="relative flex-1 min-h-[300px] rounded-2xl bg-gradient-to-b from-[#240c0c] via-[#160606] to-[#080202] border-2 border-red-500/50 overflow-hidden shadow-inner">
+        {/* Baseline Landing Skid Guide Notification */}
+        {altitude === 0 && (
+          <div className="absolute bottom-3 inset-x-0 z-30 flex justify-center pointer-events-none">
+            <span className="px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-amber-400/80 text-amber-300 font-mono text-[11px] font-bold shadow-lg flex items-center space-x-1.5 animate-bounce">
+              <span>🛬 TOUCHDOWN ON BASELINE</span>
+              <span className="text-slate-400">•</span>
+              <span className="text-white">PRESS [▲ THRUST / SPACE] TO LIFT OFF!</span>
+            </span>
+          </div>
+        )}
+
         {/* Dust Storm Whiteout Effect */}
         {whiteoutActive && (
           <div className="absolute inset-0 bg-amber-800/40 backdrop-blur-sm z-30 flex items-center justify-center pointer-events-none">
@@ -1310,186 +1349,385 @@ function IngenuityFlightGameInner({ onWin, onLose }) {
 }
 
 // =========================================================================
-// GAME 4: Opportunity Rock Sample Expedition (8x8 Tactical Grid & Spectrometer)
+// GAME 4: Opportunity's Mars Blueberry Hunt (Kid-Friendly Rover Adventure)
 // =========================================================================
 function MarsRoverGameInner({ onWin, onLose }) {
-  const [roverPos, setRoverPos] = useState({ r: 6, c: 1 });
+  // Grid size: 6 rows x 7 columns (fits perfectly in any screen height)
+  const ROWS = 6;
+  const COLS = 7;
+
+  // Initial Game State
+  const [roverPos, setRoverPos] = useState({ r: 4, c: 1 });
+  const [facing, setFacing] = useState('right'); // 'left', 'right', 'up', 'down'
   const [battery, setBattery] = useState(100);
-  const [sector, setSector] = useState(1);
-  const [scannedTarget, setScannedTarget] = useState(null);
-  const [collectedBlueberries, setCollectedBlueberries] = useState(0);
+  const [score, setScore] = useState(0);
+  const [oppyMood, setOppyMood] = useState('happy'); // 'happy', 'excited', 'oops'
+  const [speechBubble, setSpeechBubble] = useState("Hi! I'm Oppy! Help me find 5 Martian Blueberries! 🫐");
 
-  const targets = [
-    { r: 2, c: 2, name: 'Hematite Blueberry Outcrop', icon: '🫐', mineral: 'Iron Oxide (Liquid Water Formed)', collected: false },
-    { r: 1, c: 5, name: 'Esperance Gypsum Bedrock', icon: '🧂', mineral: 'Calcium Sulfate Vein', collected: false },
-    { r: 4, c: 6, name: 'Smectite Clay Strata', icon: '🏺', mineral: 'Hydrated Silicate Clay', collected: false },
-    { r: 5, c: 3, name: 'Heat Shield Iron Meteorite', icon: '☄️', mineral: 'Kamacite Nickel-Iron', collected: false },
-  ];
+  // Collectible Blueberries (5 scattered across Mars)
+  const [blueberries, setBlueberries] = useState([
+    { id: 1, r: 1, c: 2, collected: false },
+    { id: 2, r: 1, c: 5, collected: false },
+    { id: 3, r: 3, c: 3, collected: false },
+    { id: 4, r: 4, c: 5, collected: false },
+    { id: 5, r: 2, c: 0, collected: false },
+  ]);
 
-  const obstacles = [
-    { r: 3, c: 2, label: '🪨 Basalt Pinnacle' },
-    { r: 3, c: 5, label: '🪨 Sharp Ejecta' },
-    { r: 4, c: 4, label: '⚠️ Purgatory Sand Dune' },
-    { r: 6, c: 4, label: '⚠️ Soft Drift' },
-  ];
+  // Batteries (Recharge solar power)
+  const [batteries, setBatteries] = useState([
+    { id: 1, r: 0, c: 4, collected: false },
+    { id: 2, r: 5, c: 3, collected: false },
+  ]);
 
-  const dustDevils = [
-    { r: 2, c: 6, label: '🌬️ Solar Cleaning Gust' },
-    { r: 5, c: 1, label: '🌬️ Solar Cleaning Gust' },
-  ];
+  // Whirly Dust Devils (Fun cleaning boosts)
+  const [dustDevils] = useState([
+    { id: 1, r: 2, c: 2 },
+    { id: 2, r: 4, c: 6 },
+  ]);
 
+  // Rocks / Boulders (Obstacles you gently bump into)
+  const [rocks] = useState([
+    { r: 2, c: 4 },
+    { r: 3, c: 1 },
+    { r: 0, c: 1 },
+    { r: 4, c: 3 },
+  ]);
+
+  // Victory Flag (Appears at row 0, col 6 once all 5 berries are found)
+  const flagPos = { r: 0, c: 6 };
+
+  const collectedCount = blueberries.filter((b) => b.collected).length;
+  const allBerriesCollected = collectedCount === blueberries.length;
+
+  // Move Oppy
   const handleMove = (dr, dc) => {
-    const nextR = Math.max(0, Math.min(7, roverPos.r + dr));
-    const nextC = Math.max(0, Math.min(7, roverPos.c + dc));
+    const nextR = roverPos.r + dr;
+    const nextC = roverPos.c + dc;
 
-    // Obstacle / Sand Dune Check
-    const obstacle = obstacles.find((o) => o.r === nextR && o.c === nextC);
-    if (obstacle) {
-      if (obstacle.label.includes('Dune')) {
-        sound.playClick('mars');
-        setBattery((b) => Math.max(0, b - 15)); // Sand trap drains extra torque
-      } else {
-        sound.playClick('mars');
-        return;
-      }
-    }
-
-    // Solar Cleaning Gust
-    const gust = dustDevils.find((g) => g.r === nextR && g.c === nextC);
-    if (gust) {
-      sound.playDiscoveryFanfare();
-      setBattery(100);
-    } else {
-      setBattery((b) => Math.max(0, b - 4));
-    }
-
-    sound.playClick('normal');
-    setRoverPos({ r: nextR, c: nextC });
-
-    // Battery depletion check
-    if (battery <= 5) {
-      onLose("Opportunity rover battery depleted in the dust! Catch cleaning breezes or avoid sand dunes to conserve solar energy.");
-    }
-  };
-
-  // Deploy Rock Abrasion Tool (RAT) & Spectrometer
-  const handleDeploySpectrometer = () => {
-    // Check adjacent target (distance <= 1)
-    const target = targets.find(
-      (t) => Math.abs(t.r - roverPos.r) <= 1 && Math.abs(t.c - roverPos.c) <= 1 && !t.collected
-    );
-
-    if (target) {
-      sound.playSpectrometerScan();
-      setScannedTarget(target);
-      target.collected = true;
-      const count = collectedBlueberries + 1;
-      setCollectedBlueberries(count);
-
-      if (count >= targets.length) {
-        setTimeout(() => onWin(260), 1500);
-      }
-    } else {
+    // Check boundaries
+    if (nextR < 0 || nextR >= ROWS || nextC < 0 || nextC >= COLS) {
       sound.playClick('mars');
+      setSpeechBubble("Woah, that's the edge of the crater! Let's turn around! 🚀");
+      setOppyMood('oops');
+      return;
+    }
+
+    // Check rock collision
+    const isRock = rocks.some((rock) => rock.r === nextR && rock.c === nextC);
+    if (isRock) {
+      sound.playClick('mars');
+      setSpeechBubble("Boop! A Martian rock! Let's drive around it! 🪨");
+      setOppyMood('oops');
+      return;
+    }
+
+    // Determine direction facing
+    if (dc > 0) setFacing('right');
+    else if (dc < 0) setFacing('left');
+    else if (dr < 0) setFacing('up');
+    else if (dr > 0) setFacing('down');
+
+    // Move rover
+    setRoverPos({ r: nextR, c: nextC });
+    setBattery((b) => Math.max(5, b - 2)); // Tiny gentle drain
+
+    // Check Blueberry collection
+    const berryIndex = blueberries.findIndex(
+      (b) => !b.collected && b.r === nextR && b.c === nextC
+    );
+    if (berryIndex !== -1) {
+      sound.playGemCollect();
+      const updated = [...blueberries];
+      updated[berryIndex].collected = true;
+      setBlueberries(updated);
+      setScore((s) => s + 100);
+      setOppyMood('excited');
+
+      const newCount = collectedCount + 1;
+      if (newCount >= blueberries.length) {
+        sound.playDiscoveryFanfare();
+        setSpeechBubble("YAY! ALL 5 BLUEBERRIES FOUND! 🎉 Now drive to the NASA Flag to WIN! 🏁");
+      } else {
+        const funFacts = [
+          "Yum! A Martian Blueberry! Water formed these billions of years ago! 🫐",
+          "Awesome job! Blueberries are made of hematite minerals! 🫐",
+          "High five! That's another ancient water treasure! 🫐",
+          "Super driving! NASA found these real blueberries on Mars in 2004! 🫐",
+        ];
+        setSpeechBubble(funFacts[newCount % funFacts.length]);
+      }
+      return;
+    }
+
+    // Check Battery recharge
+    const batIndex = batteries.findIndex(
+      (b) => !b.collected && b.r === nextR && b.c === nextC
+    );
+    if (batIndex !== -1) {
+      sound.playDiscoveryFanfare();
+      const updatedBats = [...batteries];
+      updatedBats[batIndex].collected = true;
+      setBatteries(updatedBats);
+      setBattery(100);
+      setScore((s) => s + 50);
+      setOppyMood('excited');
+      setSpeechBubble("⚡ ZAP! Solar power boosted to 100%! Zoom zoom! 🔋");
+      return;
+    }
+
+    // Check Dust Devil whirl
+    const isWhirlwind = dustDevils.some((g) => g.r === nextR && g.c === nextC);
+    if (isWhirlwind) {
+      sound.playRotorBoost();
+      setBattery(100);
+      setScore((s) => s + 50);
+      setOppyMood('excited');
+      setSpeechBubble("🌪️ Wheee! A friendly Martian whirlwind cleaned our solar panels! ⚡");
+      return;
+    }
+
+    // Check Victory Flag reach
+    if (allBerriesCollected && nextR === flagPos.r && nextC === flagPos.c) {
+      sound.playDiscoveryFanfare();
+      setSpeechBubble("🏆 MISSION COMPLETE! You and Oppy proved Mars had water! 🌟");
+      setTimeout(() => {
+        onWin(300);
+      }, 1500);
+      return;
+    }
+
+    // Normal step
+    sound.playClick('normal');
+    setOppyMood('happy');
+  };
+
+  // Click on tile to move toward it
+  const handleTileClick = (r, c) => {
+    const dr = r - roverPos.r;
+    const dc = c - roverPos.c;
+    // If adjacent tile (orthogonal)
+    if (Math.abs(dr) + Math.abs(dc) === 1) {
+      handleMove(dr, dc);
+    } else if (dr === 0 && dc === 0) {
+      setSpeechBubble("Beep boop! That's me, Oppy! Tap the arrows to drive! 🤖");
     }
   };
+
+  // Keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        handleMove(-1, 0);
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        handleMove(1, 0);
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        handleMove(0, -1);
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        handleMove(0, 1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [roverPos, blueberries, batteries, collectedCount, allBerriesCollected]);
 
   return (
-    <div className="space-y-3 h-full flex flex-col justify-between">
-      {/* Telemetry Header */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-slate-900/90 p-3 rounded-xl border border-slate-700 text-center shrink-0">
-        <div>
-          <span className="text-slate-400 block text-[10px]">WATER MINERALS DRILLED</span>
-          <span className="text-amber-400 font-bold">{collectedBlueberries} / {targets.length} Sites</span>
-        </div>
-        <div>
-          <span className="text-slate-400 block text-[10px]">SOLAR BATTERY</span>
-          <span className={`font-bold ${battery < 25 ? 'text-rose-400 animate-pulse' : 'text-cyan-400'}`}>
-            🔋 {battery}%
-          </span>
-        </div>
-        <div>
-          <span className="text-slate-400 block text-[10px]">CURRENT ROVER TOOLS</span>
-          <span className="text-emerald-300 font-bold">APXS Spectrometer &amp; RAT</span>
-        </div>
-        <div>
-          <span className="text-slate-400 block text-[10px]">LAST SPECTRUM</span>
-          <span className="text-purple-300 font-bold truncate">
-            {scannedTarget ? scannedTarget.mineral : 'Awaiting Scan'}
-          </span>
-        </div>
-      </div>
-
-      {/* 8x8 Tactical Geological Grid Map */}
-      <div className="grid grid-cols-8 gap-1.5 p-3 sm:p-4 rounded-2xl bg-gradient-to-b from-[#1b0808] to-[#0c0303] border-2 border-amber-500/50 flex-1 min-h-[300px]">
-        {Array.from({ length: 8 }).map((_, r) =>
-          Array.from({ length: 8 }).map((_, c) => {
-            const isRover = roverPos.r === r && roverPos.c === c;
-            const target = targets.find((t) => t.r === r && t.c === c);
-            const obstacle = obstacles.find((o) => o.r === r && o.c === c);
-            const gust = dustDevils.find((g) => g.r === r && g.c === c);
-
-            return (
-              <div
-                key={`${r}-${c}`}
-                className={`rounded-lg border flex flex-col items-center justify-center text-lg sm:text-xl transition-all ${
-                  isRover
-                    ? 'border-cyan-400 bg-cyan-950/80 shadow-[0_0_15px_#00F0FF] scale-105 z-10'
-                    : obstacle
-                    ? 'border-red-900/60 bg-red-950/30 text-red-400'
-                    : gust
-                    ? 'border-sky-500/50 bg-sky-950/30 text-sky-300 animate-pulse'
-                    : target
-                    ? target.collected
-                      ? 'border-emerald-500 bg-emerald-950/50 text-emerald-400'
-                      : 'border-amber-400 bg-amber-950/50 text-amber-300 animate-bounce'
-                    : 'border-slate-800/80 bg-black/40 text-slate-700'
-                }`}
-              >
-                {isRover ? '🤖' : obstacle ? (obstacle.label.includes('Dune') ? '🏜️' : '🪨') : gust ? '🌬️' : target ? target.icon : '·'}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Controls: D-Pad and Spectrometer Arm */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
-        <button
-          onClick={handleDeploySpectrometer}
-          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-black font-mono text-xs font-extrabold tracking-wider border border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)] cursor-pointer active:scale-95 flex items-center justify-center space-x-2"
-        >
-          <Zap className="w-4 h-4 fill-black" />
-          <span>DEPLOY SPECTROMETER &amp; DRILL ADJACENT ROCK</span>
-        </button>
-
-        {/* D-Pad */}
+    <div className="h-full flex flex-col justify-between select-none max-w-2xl mx-auto w-full px-2 py-1">
+      {/* 1. Kid-Friendly Score & Mission Goal Bar */}
+      <div className="bg-slate-900/95 border-2 border-amber-500/60 rounded-xl p-2.5 shadow-md flex items-center justify-between gap-2 shrink-0 font-mono">
+        {/* Goal Indicator */}
         <div className="flex items-center space-x-2">
+          <span className="text-2xl animate-bounce">🫐</span>
+          <div>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
+              BLUEBERRIES COLLECTED
+            </span>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-amber-400 font-extrabold text-sm sm:text-base">
+                {collectedCount} / 5
+              </span>
+              <div className="flex space-x-0.5">
+                {blueberries.map((b) => (
+                  <span key={b.id} className="text-xs">
+                    {b.collected ? '🫐' : '⚪'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Battery Bar */}
+        <div className="flex items-center space-x-2">
+          <div className="text-right">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
+              SOLAR POWER
+            </span>
+            <span className="text-emerald-400 font-bold text-xs">
+              ⚡ {battery}%
+            </span>
+          </div>
+          <div className="w-14 sm:w-20 bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
+            <div
+              className={`h-full transition-all duration-300 ${
+                battery > 50 ? 'bg-emerald-400' : battery > 25 ? 'bg-amber-400' : 'bg-rose-400'
+              }`}
+              style={{ width: `${battery}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Points */}
+        <div className="text-right">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
+            MISSION SCORE
+          </span>
+          <span className="text-cyan-300 font-extrabold text-sm sm:text-base">
+            ⭐ {score} XP
+          </span>
+        </div>
+      </div>
+
+      {/* 2. Oppy's Friendly Speech Bubble */}
+      <div className="my-1.5 bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border-l-4 border-amber-400 px-3 py-1.5 rounded-r-lg flex items-center space-x-2 shrink-0">
+        <span className="text-xl shrink-0">
+          {oppyMood === 'excited' ? '🌟' : oppyMood === 'oops' ? '😅' : '🤖'}
+        </span>
+        <span className="text-xs sm:text-sm font-sans font-semibold text-amber-200">
+          {speechBubble}
+        </span>
+      </div>
+
+      {/* 3. The Martian Playground (Fits perfectly inside the container) */}
+      <div className="flex-1 min-h-0 w-full flex items-center justify-center p-1">
+        <div className="w-full h-full max-h-[300px] sm:max-h-[340px] bg-gradient-to-b from-[#2b0f0f] via-[#1c0808] to-[#120404] border-2 border-amber-500/80 rounded-2xl p-1.5 sm:p-2 shadow-[0_0_25px_rgba(245,158,11,0.25)] flex flex-col justify-center">
+          <div className="grid grid-rows-6 grid-cols-7 gap-1 sm:gap-1.5 w-full h-full">
+            {Array.from({ length: ROWS }).map((_, r) =>
+              Array.from({ length: COLS }).map((_, c) => {
+                const isRover = roverPos.r === r && roverPos.c === c;
+                const berry = blueberries.find((b) => b.r === r && b.c === c);
+                const bat = batteries.find((b) => b.r === r && b.c === c);
+                const whirl = dustDevils.find((g) => g.r === r && g.c === c);
+                const rock = rocks.find((rk) => rk.r === r && rk.c === c);
+                const isFlag = allBerriesCollected && flagPos.r === r && flagPos.c === c;
+
+                // Is tile adjacent to rover? (clickable)
+                const isAdjacent = Math.abs(roverPos.r - r) + Math.abs(roverPos.c - c) === 1;
+
+                return (
+                  <button
+                    key={`${r}-${c}`}
+                    onClick={() => handleTileClick(r, c)}
+                    className={`relative rounded-xl border flex items-center justify-center transition-all cursor-pointer select-none ${
+                      isRover
+                        ? 'border-cyan-400 bg-cyan-950/90 shadow-[0_0_15px_#00F0FF] scale-105 z-20 ring-2 ring-cyan-300'
+                        : isFlag
+                        ? 'border-emerald-400 bg-emerald-950/80 shadow-[0_0_20px_#10B981] animate-bounce z-10'
+                        : berry && !berry.collected
+                        ? 'border-indigo-400/80 bg-indigo-950/40 shadow-[0_0_10px_rgba(129,140,248,0.5)]'
+                        : bat && !bat.collected
+                        ? 'border-emerald-400/80 bg-emerald-950/40 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+                        : whirl
+                        ? 'border-sky-400/60 bg-sky-950/30 text-sky-300'
+                        : rock
+                        ? 'border-red-950/80 bg-red-950/40 text-stone-300'
+                        : isAdjacent
+                        ? 'border-amber-500/40 bg-amber-950/20 hover:bg-amber-900/40 hover:border-amber-400'
+                        : 'border-amber-950/40 bg-black/40 text-slate-700'
+                    }`}
+                  >
+                    {/* Item contents */}
+                    {isRover ? (
+                      <span
+                        className="text-2xl sm:text-3xl transition-transform duration-200"
+                        style={{
+                          transform:
+                            facing === 'left'
+                              ? 'scaleX(-1)'
+                              : facing === 'up'
+                              ? 'rotate(-20deg)'
+                              : facing === 'down'
+                              ? 'rotate(20deg)'
+                              : 'none',
+                        }}
+                      >
+                        🤖
+                      </span>
+                    ) : isFlag ? (
+                      <span className="text-2xl sm:text-3xl animate-bounce">🏁</span>
+                    ) : berry && !berry.collected ? (
+                      <span className="text-xl sm:text-2xl animate-pulse filter drop-shadow">
+                        🫐
+                      </span>
+                    ) : bat && !bat.collected ? (
+                      <span className="text-lg sm:text-xl animate-bounce">🔋</span>
+                    ) : whirl ? (
+                      <span className="text-base sm:text-lg animate-spin" style={{ animationDuration: '6s' }}>
+                        🌪️
+                      </span>
+                    ) : rock ? (
+                      <span className="text-lg sm:text-xl">🪨</span>
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-900/40" />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Big, Colorful Kid-Friendly Arrow Controls */}
+      <div className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-2 shadow flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
+        <div className="text-center sm:text-left">
+          <span className="text-white font-bold text-xs block">
+            🎮 HOW TO DRIVE OPPY:
+          </span>
+          <span className="text-[11px] text-slate-300 font-sans">
+            Use Keyboard <span className="text-amber-300 font-mono font-bold">[Arrow Keys]</span> or <span className="text-amber-300 font-mono font-bold">[W A S D]</span>, or tap the green arrows!
+          </span>
+        </div>
+
+        {/* Big Touch Directional D-Pad */}
+        <div className="flex items-center space-x-2">
+          {/* Left */}
           <button
             onClick={() => handleMove(0, -1)}
-            className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-mono font-bold text-xs border border-slate-700 cursor-pointer"
+            className="w-11 h-11 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white font-black text-lg shadow-lg flex items-center justify-center border-2 border-emerald-300 cursor-pointer"
+            title="Drive Left (A / Left Arrow)"
           >
-            ◀ WEST
+            ⬅️
           </button>
+
+          {/* Up / Down */}
           <div className="flex flex-col space-y-1">
             <button
               onClick={() => handleMove(-1, 0)}
-              className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-mono font-bold text-xs border border-slate-700 cursor-pointer"
+              className="w-11 h-8 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white font-black text-sm shadow flex items-center justify-center border-2 border-emerald-300 cursor-pointer"
+              title="Drive Up (W / Up Arrow)"
             >
-              ▲ NORTH
+              ⬆️
             </button>
             <button
               onClick={() => handleMove(1, 0)}
-              className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-mono font-bold text-xs border border-slate-700 cursor-pointer"
+              className="w-11 h-8 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white font-black text-sm shadow flex items-center justify-center border-2 border-emerald-300 cursor-pointer"
+              title="Drive Down (S / Down Arrow)"
             >
-              ▼ SOUTH
+              ⬇️
             </button>
           </div>
+
+          {/* Right */}
           <button
             onClick={() => handleMove(0, 1)}
-            className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-mono font-bold text-xs border border-slate-700 cursor-pointer"
+            className="w-11 h-11 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white font-black text-lg shadow-lg flex items-center justify-center border-2 border-emerald-300 cursor-pointer"
+            title="Drive Right (D / Right Arrow)"
           >
-            EAST ▶
+            ➡️
           </button>
         </div>
       </div>
@@ -1663,175 +1901,380 @@ function InsightSeismicGameInner({ onWin, onLose }) {
 }
 
 // =========================================================================
-// GAME 6: Kepler Exoplanet Transit Hunter (Explainable & Logical Light Curve Analysis)
+// GAME 6: Kepler Alien World Hunter (Kid-Friendly Exoplanet Discovery Lab)
 // =========================================================================
 function KeplerTransitGameInner({ onWin, onLose }) {
-  const [systemIndex, setSystemIndex] = useState(0);
-  const [time, setTime] = useState(0);
-  const [markedTransit, setMarkedTransit] = useState(false);
-  const [measuredDepth, setMeasuredDepth] = useState(0.12);
-  const [confirmedPlanets, setConfirmedPlanets] = useState([]);
-
-  const candidateStars = [
+  // 3 Famous Real NASA Exoplanets
+  const EXOPLANET_SYSTEMS = [
     {
       id: 1,
-      star: "Kepler-452 (G2-Type Sun-Like)",
-      planet: "Kepler-452b",
-      desc: "Earth's Older Cousin (1.6x Earth Radius)",
-      period: "385 Days",
-      targetDepth: 0.12,
-      habitable: true,
+      starName: "Kepler-452 (Sun-Like Star)",
+      planetName: "Kepler-452b",
+      nickname: "Earth's Older Cousin 🌍",
+      starType: "Golden Sun (G2-Type)",
+      starGradient: "from-yellow-100 via-amber-400 to-orange-500",
+      starGlow: "rgba(245, 158, 11, 0.8)",
+      planetColor: "from-blue-600 via-emerald-500 to-sky-400",
+      planetDetails: "Rocky Super-Earth with green continents, blue oceans, and fluffy white clouds!",
+      temperature: "22°C (Warm & Sunny)",
+      goldilocksStatus: "🍲 JUST RIGHT! Liquid water can flow freely!",
+      distance: "1,400 Light Years away in Cygnus",
     },
     {
       id: 2,
-      star: "Kepler-186 (M1-Type Red Dwarf)",
-      planet: "Kepler-186f",
-      desc: "First Validated Earth-Sized Planet in Habitable Zone",
-      period: "130 Days",
-      targetDepth: 0.04,
-      habitable: true,
+      starName: "Kepler-186 (Cozy Red Dwarf)",
+      planetName: "Kepler-186f",
+      nickname: "The Red-Sun Earth 🔴",
+      starType: "Cool Red Dwarf (M-Type)",
+      starGradient: "from-rose-200 via-red-500 to-rose-700",
+      starGlow: "rgba(244, 63, 94, 0.85)",
+      planetColor: "from-rose-700 via-purple-600 to-indigo-900",
+      planetDetails: "Earth-sized world! Under its gentle red sun, plants might have red or purple leaves!",
+      temperature: "14°C (Crisp & Autumn-like)",
+      goldilocksStatus: "🍲 JUST RIGHT! Cool enough for ice caps and liquid seas!",
+      distance: "580 Light Years away",
     },
     {
       id: 3,
-      star: "Kepler-22 (G5-Type Yellow Dwarf)",
-      planet: "Kepler-22b",
-      desc: "Water Ocean World in Habitable Zone (2.4x Earth Radius)",
-      period: "290 Days",
-      targetDepth: 0.22,
-      habitable: true,
+      starName: "Kepler-22 (Bright Sun)",
+      planetName: "Kepler-22b",
+      nickname: "The Warm Ocean World 🌊",
+      starType: "Yellow-Green Dwarf (G5-Type)",
+      starGradient: "from-amber-200 via-yellow-400 to-amber-600",
+      starGlow: "rgba(234, 179, 8, 0.85)",
+      planetColor: "from-cyan-400 via-blue-600 to-teal-500",
+      planetDetails: "A massive planet covered by a global warm ocean! No dry land—just endless blue waters!",
+      temperature: "20°C (Tropical Ocean Paradise)",
+      goldilocksStatus: "🍲 JUST RIGHT! A colossal ocean world!",
+      distance: "620 Light Years away",
     },
   ];
 
-  const currentCandidate = candidateStars[systemIndex] || candidateStars[0];
+  const [systemIdx, setSystemIdx] = useState(0);
+  const [orbitProgress, setOrbitProgress] = useState(15); // 0 to 100%
+  const [isAutoOrbit, setIsAutoOrbit] = useState(true);
+  const [gameStep, setGameStep] = useState('hunting'); // 'hunting', 'captured', 'scanned'
+  const [shutterFlash, setShutterFlash] = useState(false);
+  const [discoveredPlanets, setDiscoveredPlanets] = useState([]);
+  const [speech, setSpeech] = useState("Telescope locked! Watch the star. When the planet blocks starlight, SNAP A PHOTO! 📸");
 
-  // Orbital revolution tick
+  const currentSystem = EXOPLANET_SYSTEMS[systemIdx];
+
+  // Automatic orbit cycle (~4.5s per revolution)
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTime((t) => (t + 1) % 100);
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
+    if (!isAutoOrbit || gameStep !== 'hunting') return;
+    const interval = setInterval(() => {
+      setOrbitProgress((prev) => (prev + 1.2) % 100);
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isAutoOrbit, gameStep]);
 
-  // Transit dip occurs between time 42 and 58
-  const isTransitDip = time >= 42 && time <= 58;
-  const stellarFlux = isTransitDip
-    ? 100.0 - currentCandidate.targetDepth * 10
-    : 100.0;
+  // Planet is directly in front of the star between 38% and 62%
+  const isCrossingStar = orbitProgress >= 38 && orbitProgress <= 62;
+  const isCentered = orbitProgress >= 46 && orbitProgress <= 54;
 
-  const handleMarkDip = () => {
-    if (isTransitDip) {
-      sound.playDiscoveryFanfare();
-      setMarkedTransit(true);
+  // Starlight brightness dips from 100% down to 86% during transit
+  const starlightPercent = isCrossingStar
+    ? Math.max(86, Math.round(100 - (1 - Math.abs(50 - orbitProgress) / 12) * 14))
+    : 100;
+
+  // Step 1: Snap telescope photo when crossing
+  const handleSnapPhoto = () => {
+    if (isCrossingStar) {
+      sound.playCameraShutter();
+      setShutterFlash(true);
+      setTimeout(() => setShutterFlash(false), 120);
+
+      setGameStep('captured');
+      setSpeech("BULLSEYE! 🎯 We caught the alien world's shadow! Now let's test for water and life! 💧");
     } else {
       sound.playClick('mars');
+      setSpeech("Oops, too early! Wait until the dark planet passes in front of the bright star! 🔭");
     }
   };
 
-  const handleConfirmExoplanet = () => {
-    sound.playDiscoveryFanfare();
-    const updated = [...confirmedPlanets, currentCandidate.planet];
-    setConfirmedPlanets(updated);
+  // Step 2: Scan for Water & Life
+  const handleScanWater = () => {
+    sound.playSpectrometerScan();
+    setTimeout(() => {
+      sound.playPlanetReveal();
+      setGameStep('scanned');
+      setSpeech(`HOORAY! 🎉 Liquid water detected! Welcome to ${currentSystem.planetName}!`);
+    }, 600);
+  };
 
-    if (systemIndex < 2) {
-      setSystemIndex((s) => s + 1);
-      setMarkedTransit(false);
-      setTime(0);
+  // Step 3: Add to Passport & Next Star
+  const handleNextPlanet = () => {
+    sound.playDiscoveryFanfare();
+    const updated = [...discoveredPlanets, currentSystem.planetName];
+    setDiscoveredPlanets(updated);
+
+    if (systemIdx < EXOPLANET_SYSTEMS.length - 1) {
+      setSystemIdx((prev) => prev + 1);
+      setGameStep('hunting');
+      setOrbitProgress(15);
+      setSpeech("New star system targeted! Watch the starlight and catch the next alien world! 🌟");
     } else {
+      setSpeech("🎉 INCREDIBLE! You discovered all 3 Alien Earths! Mission Complete! 🏆");
       setTimeout(() => {
         onWin(280);
-      }, 1500);
+      }, 1600);
     }
   };
 
+  // Keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' || e.key === 'Enter') {
+        e.preventDefault();
+        if (gameStep === 'hunting') handleSnapPhoto();
+        else if (gameStep === 'captured') handleScanWater();
+        else if (gameStep === 'scanned') handleNextPlanet();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameStep, isCrossingStar, systemIdx, discoveredPlanets]);
+
   return (
-    <div className="space-y-3 h-full flex flex-col justify-between">
-      {/* Telemetry Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 text-xs font-mono gap-2 shrink-0">
+    <div className="h-full flex flex-col justify-between select-none max-w-2xl mx-auto w-full px-2 py-1 font-mono">
+      {/* 1. Header Bar: Target Star & Discovery Passport */}
+      <div className="bg-slate-900/95 border-2 border-cyan-500/60 rounded-xl p-2.5 shadow-md flex items-center justify-between gap-2 shrink-0">
         <div>
-          <span className="text-slate-400">OBSERVING TARGET: </span>
-          <strong className="text-cyan-400">{currentCandidate.star}</strong>
-        </div>
-        <div>
-          <span className="text-slate-400">PLANET: </span>
-          <strong className="text-amber-300">{currentCandidate.planet}</strong> ({currentCandidate.desc})
-        </div>
-        <div className="text-emerald-400 font-bold">
-          CONFIRMED: {confirmedPlanets.length} / 3 CANDIDATES
-        </div>
-      </div>
-
-      {/* Star Optical Field & Live Transit Graph */}
-      <div className="relative flex-1 min-h-[280px] rounded-2xl bg-black border-2 border-cyan-500/50 p-4 flex flex-col justify-between overflow-hidden shadow-inner">
-        {/* Star & Orbiting Planet Visual */}
-        <div className="relative w-full h-28 flex items-center justify-center">
-          <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-yellow-500 shadow-[0_0_50px_#F59E0B] flex items-center justify-center overflow-hidden">
-            {/* Solar Surface Granules */}
-            <div className="absolute inset-0 opacity-25 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px]" />
-
-            {/* Transiting Planet Disc crossing the Star */}
-            <div
-              className="absolute w-6 h-6 rounded-full bg-black border border-slate-700 shadow-2xl transition-all duration-75"
-              style={{ left: `${time}%` }}
-            />
-          </div>
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
+            TELESCOPE TARGET
+          </span>
+          <span className="text-cyan-300 font-extrabold text-xs sm:text-sm">
+            🔭 {currentSystem.starName}
+          </span>
         </div>
 
-        {/* Real-Time Light Curve Telemetry Graph */}
-        <div className="bg-slate-950/90 p-3 rounded-xl border border-slate-800 space-y-2 z-10">
-          <div className="flex justify-between items-center text-xs font-mono">
-            <span className="text-slate-400">STELLAR FLUX BRIGHTNESS</span>
-            <span className={isTransitDip ? 'text-amber-400 font-bold animate-pulse' : 'text-cyan-400'}>
-              {stellarFlux.toFixed(2)}% {isTransitDip && '▼ TRANSIT DIP DETECTED!'}
+        {/* Starlight Brightness Meter */}
+        <div className="text-center px-3 py-1 rounded-lg bg-black/60 border border-slate-700">
+          <span className="text-[9px] text-slate-400 uppercase tracking-wider block">
+            STARLIGHT BRIGHTNESS
+          </span>
+          <span
+            className={`font-black text-xs sm:text-sm ${
+              isCrossingStar ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
+            }`}
+          >
+            ☀️ {starlightPercent}% {isCrossingStar && '▼ (BLINKING!)'}
+          </span>
+        </div>
+
+        {/* Discovery Passport Stamps */}
+        <div className="text-right">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">
+            ALIEN EARTHS FOUND
+          </span>
+          <div className="flex items-center justify-end space-x-1">
+            <span className="text-purple-300 font-extrabold text-xs sm:text-sm">
+              {discoveredPlanets.length} / 3
             </span>
-            <span className="text-emerald-400 font-bold">ORBITAL PERIOD: {currentCandidate.period} (HABITABLE ZONE)</span>
-          </div>
-
-          {/* Light Curve Graph Points */}
-          <div className="h-12 w-full flex items-end space-x-1 border-b border-l border-slate-700 px-2 pb-1">
-            {Array.from({ length: 40 }).map((_, i) => {
-              const inDip = i >= 17 && i <= 23;
-              const h = inDip ? 40 : 85;
-              return (
-                <div
-                  key={i}
-                  className={`flex-1 rounded-sm transition-all ${
-                    inDip ? 'bg-amber-400 shadow-[0_0_8px_#F59E0B]' : 'bg-cyan-500/60'
-                  }`}
-                  style={{ height: `${h}%` }}
-                />
-              );
-            })}
+            <div className="flex space-x-0.5 text-xs">
+              {EXOPLANET_SYSTEMS.map((s, idx) => (
+                <span key={s.id}>
+                  {discoveredPlanets.includes(s.planetName) ? '🪐' : '⚪'}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Logical 2-Step Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
-        <button
-          onClick={handleMarkDip}
-          disabled={markedTransit}
-          className={`py-3.5 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-            markedTransit
-              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500'
-              : 'bg-cyan-500 text-black hover:bg-cyan-400 shadow-[0_0_20px_rgba(0,240,255,0.4)]'
-          }`}
-        >
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{markedTransit ? `✓ DIP MARKED (ΔF/F = ${currentCandidate.targetDepth}%)` : 'STEP 1: MARK TRANSIT DIP WHILE PLANET CROSSES'}</span>
-        </button>
+      {/* 2. Kepler Mascot Friendly Speech Bubble */}
+      <div className="my-1.5 bg-gradient-to-r from-cyan-500/20 via-blue-500/10 to-transparent border-l-4 border-cyan-400 px-3 py-1.5 rounded-r-lg flex items-center space-x-2 shrink-0">
+        <span className="text-xl shrink-0">
+          {gameStep === 'scanned' ? '🎉' : isCrossingStar ? '👀' : '🔭'}
+        </span>
+        <span className="text-xs sm:text-sm font-sans font-semibold text-cyan-200">
+          {speech}
+        </span>
+      </div>
 
-        <button
-          onClick={handleConfirmExoplanet}
-          disabled={!markedTransit}
-          className={`py-3.5 rounded-xl font-mono text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-            markedTransit
-              ? 'bg-amber-400 text-black hover:bg-amber-300 shadow-[0_0_25px_rgba(245,158,11,0.6)] animate-pulse'
-              : 'bg-slate-800 text-slate-500 border border-slate-700'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 fill-black" />
-          <span>{systemIndex < 2 ? `STEP 2: CONFIRM HABITABLE EXOPLANET (${systemIndex + 1}/3)` : 'STEP 2: CONFIRM ALL &amp; COMPLETE'}</span>
-        </button>
+      {/* 3. The Interactive Deep Space Telescope Viewport */}
+      <div className="relative flex-1 min-h-0 w-full flex items-center justify-center p-1">
+        {/* Camera Shutter Flash Effect */}
+        {shutterFlash && (
+          <div className="absolute inset-0 bg-white z-50 rounded-2xl animate-fade-out pointer-events-none" />
+        )}
+
+        <div className="relative w-full h-full max-h-[300px] sm:max-h-[340px] bg-gradient-to-b from-[#030712] via-[#050b1d] to-[#020510] border-2 border-cyan-500/70 rounded-2xl p-3 shadow-[0_0_30px_rgba(6,182,212,0.3)] flex flex-col justify-between overflow-hidden">
+          {/* Background Starfield twinkling */}
+          <div className="absolute inset-0 opacity-40 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+          {/* Telescope Circular HUD Reticle */}
+          <div className="absolute inset-0 border border-cyan-500/20 rounded-2xl pointer-events-none flex items-center justify-center">
+            <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full border border-cyan-400/30 border-dashed animate-spin" style={{ animationDuration: '60s' }} />
+          </div>
+
+          {/* MAIN SPACE VIEW: Star in Center + Orbiting Planet */}
+          <div className="relative flex-1 flex items-center justify-center">
+            {/* The Giant Alien Star in Center */}
+            <div
+              className={`relative w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gradient-to-br ${currentSystem.starGradient} flex items-center justify-center transition-all duration-300`}
+              style={{
+                boxShadow: `0 0 50px ${currentSystem.starGlow}, inset 0 0 20px rgba(255,255,255,0.8)`,
+              }}
+            >
+              {/* Star Surface Granulation Activity */}
+              <div className="absolute inset-0 rounded-full opacity-30 bg-[radial-gradient(#fff_2px,transparent_2px)] [background-size:6px_6px] animate-pulse" />
+
+              {/* Orbiting Planet Track Overlay */}
+              <div className="absolute inset-x-[-40px] sm:inset-x-[-60px] h-0.5 border-t border-cyan-400/40 border-dashed" />
+
+              {/* THE ORBITING PLANET */}
+              <div
+                className="absolute transition-all duration-75 flex items-center justify-center"
+                style={{
+                  left: `${orbitProgress}%`,
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                {/* Visual Representation of Planet */}
+                {gameStep === 'scanned' ? (
+                  // Living, colorful discovered world!
+                  <div
+                    className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br ${currentSystem.planetColor} border-2 border-white shadow-[0_0_20px_#00F0FF] animate-bounce flex items-center justify-center text-lg`}
+                  >
+                    🌱
+                  </div>
+                ) : (
+                  // Dark Silhouette during transit eclipse
+                  <div
+                    className={`rounded-full transition-all ${
+                      isCrossingStar
+                        ? 'w-8 h-8 sm:w-10 sm:h-10 bg-black border-2 border-cyan-300 shadow-[0_0_15px_#00F0FF] ring-2 ring-amber-400'
+                        : 'w-6 h-6 sm:w-7 sm:h-7 bg-slate-900 border border-slate-600'
+                    }`}
+                  >
+                    {isCrossingStar && (
+                      <span className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-amber-500 text-black text-[9px] font-black uppercase whitespace-nowrap shadow animate-pulse">
+                        TRANSIT! 📸
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Live Telemetry within Viewport */}
+          <div className="relative z-10 bg-black/75 border border-slate-800 rounded-xl p-2 flex items-center justify-between text-[11px] text-slate-300">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-cyan-400 font-bold">ORBIT POSITION:</span>
+              <span>{Math.round(orbitProgress)}%</span>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <span className="text-amber-400 font-bold">STATUS:</span>
+              <span className={isCrossingStar ? 'text-amber-300 font-bold animate-pulse' : 'text-slate-400'}>
+                {isCrossingStar ? '🚨 ECLIPSE DETECTED!' : 'Planet in outer orbit'}
+              </span>
+            </div>
+
+            {/* Manual Orbit Scrub Slider for Kids who like direct interaction */}
+            <div className="flex items-center space-x-1.5">
+              <span className="text-[10px] text-slate-400">Scrub Orbit:</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(orbitProgress)}
+                onChange={(e) => {
+                  setIsAutoOrbit(false);
+                  setOrbitProgress(Number(e.target.value));
+                }}
+                className="w-16 sm:w-24 accent-cyan-400 cursor-pointer h-1.5"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Action & Discovery Deck (Intuitive 1-Button Progression) */}
+      <div className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-2.5 shadow flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        {/* Step 1: Hunting - Snap photo */}
+        {gameStep === 'hunting' && (
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="text-center sm:text-left">
+              <span className="text-white font-bold text-xs block">
+                🎯 STEP 1: CATCH THE PLANET'S ECLIPSE
+              </span>
+              <span className="text-[11px] text-slate-300 font-sans">
+                Wait until the black planet passes over the star, then tap <strong className="text-amber-300">[SNAP PHOTO]</strong> or press <strong className="text-amber-300">[SPACE]</strong>!
+              </span>
+            </div>
+
+            <button
+              onClick={handleSnapPhoto}
+              className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-mono text-xs font-black tracking-wider transition-all cursor-pointer active:scale-95 shadow-lg flex items-center justify-center space-x-2 ${
+                isCrossingStar
+                  ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black shadow-[0_0_25px_rgba(245,158,11,0.8)] animate-bounce border-2 border-amber-200'
+                  : 'bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-400'
+              }`}
+            >
+              <span>📸</span>
+              <span>SNAP TELESCOPE PHOTO [SPACE]</span>
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Captured - Test for Water & Habitability */}
+        {gameStep === 'captured' && (
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-emerald-400 font-bold text-xs">
+                  ✓ SHADOW CAPTURED!
+                </span>
+                <span className="text-slate-300 text-xs">
+                  Temperature: <strong className="text-amber-300">{currentSystem.temperature}</strong>
+                </span>
+              </div>
+              <span className="text-[11px] text-emerald-300 font-sans block">
+                {currentSystem.goldilocksStatus}
+              </span>
+            </div>
+
+            <button
+              onClick={handleScanWater}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black font-black text-xs tracking-wider border-2 border-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.8)] cursor-pointer active:scale-95 flex items-center justify-center space-x-2 animate-bounce"
+            >
+              <span>💧</span>
+              <span>SCAN FOR LIQUID WATER &amp; LIFE [SPACE]</span>
+            </button>
+          </div>
+        )}
+
+        {/* Step 3: Scanned - Living World Revealed! */}
+        {gameStep === 'scanned' && (
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-purple-300 font-bold text-xs">
+                  🪐 {currentSystem.planetName} ({currentSystem.nickname})
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-200 font-sans block">
+                {currentSystem.planetDetails}
+              </span>
+            </div>
+
+            <button
+              onClick={handleNextPlanet}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-300 hover:to-emerald-400 text-black font-black text-xs tracking-wider border-2 border-emerald-200 shadow-[0_0_25px_rgba(16,185,129,0.8)] cursor-pointer active:scale-95 flex items-center justify-center space-x-2 animate-bounce"
+            >
+              <span>🌟</span>
+              <span>
+                {systemIdx < EXOPLANET_SYSTEMS.length - 1
+                  ? 'COLLECT BADGE & FIND NEXT WORLD ➡️'
+                  : 'CONFIRM ALL & CLAIM NASA BADGE 🏆'}
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

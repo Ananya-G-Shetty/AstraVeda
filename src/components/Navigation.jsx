@@ -14,6 +14,7 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { sound } from '../utils/soundEngine';
+import { UserProfileBadge } from '../auth/UserProfileBadge';
 
 export function Navigation({
   currentScene,
@@ -28,6 +29,9 @@ export function Navigation({
   onOpenMemorial,
   onOpenMissionSelect,
   onSkipCinematic,
+  cadet,
+  onOpenAuth,
+  onLogout,
 }) {
   const handleNav = (scene) => {
     sound.playClick('normal');
@@ -154,6 +158,13 @@ export function Navigation({
             <SkipForward className="w-3.5 h-3.5 text-cyan-400" />
           </button>
         )}
+
+        {/* Astronaut Cadet Profile Badge */}
+        <UserProfileBadge
+          cadet={cadet}
+          onOpenAuth={onOpenAuth}
+          onLogout={onLogout}
+        />
 
         {/* Explorer Rank & XP Pill */}
         <button

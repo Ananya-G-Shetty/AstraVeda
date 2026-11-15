@@ -32,6 +32,7 @@ import { BadgesModal } from './components/BadgesModal';
 import { BadgeUnlockedAlert } from './components/BadgeUnlockedAlert';
 import { FinalMemorialModal } from './components/FinalMemorialModal';
 import { MissionsDrawer } from './components/MissionsDrawer';
+import { authService, AuthModal } from './auth';
 
 import { ArrowLeft } from 'lucide-react';
 
@@ -53,6 +54,21 @@ export default function App() {
   const [showBadges, setShowBadges] = useState(false);
   const [showMemorial, setShowMemorial] = useState(false);
   const [showMissionsDrawer, setShowMissionsDrawer] = useState(false);
+
+  // Astronaut Cadet Authentication State (Shown as default screen on load or when switching profile)
+  const [currentUser, setCurrentUser] = useState(() => authService.getCurrentCadet());
+  const [showAuthModal, setShowAuthModal] = useState(true);
+
+  const handleAuthSuccess = (cadet) => {
+    setCurrentUser(cadet);
+    setShowAuthModal(false);
+  };
+
+  const handleLogout = () => {
+    authService.logoutCadet();
+    setCurrentUser(null);
+    setShowAuthModal(true);
+  };
 
   // Audio State
   const [isMuted, setIsMuted] = useState(false);
@@ -141,6 +157,9 @@ export default function App() {
         onOpenMemorial={() => setShowMemorial(true)}
         onOpenMissionSelect={() => setShowMissionsDrawer(true)}
         onSkipCinematic={handleCinematicComplete}
+        cadet={currentUser}
+        onOpenAuth={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
       />
 
       {/* SCENE 1: CINEMATIC SEQUENCE (Matches Launchpad, Ignition, Ascent, Video Cruise, & Rocket Briefing!) */}
@@ -396,6 +415,19 @@ export default function App() {
         badge={progression.newlyUnlockedBadge}
         onDismiss={progression.dismissBadgePopup}
       />
+
+      {/* ASTRONAUT CADET AUTHENTICATION MODAL (Initial Terminal Clearance) */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={() => setShowAuthModal(false)}
+            onAuthSuccess={handleAuthSuccess}
+            canCloseWithoutAuth={!!currentUser}
+            initialTab="guest"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
