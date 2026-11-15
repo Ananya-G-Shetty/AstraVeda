@@ -20,7 +20,13 @@ def create_app(config_object=None):
     )
 
     from app.routes.health_routes import health_bp
+    from app.routes.session_routes import session_bp
+    from app.routes.progress_routes import progress_bp
+    from app.routes.game_routes import game_bp
     app.register_blueprint(health_bp, url_prefix="/api/v1")
+    app.register_blueprint(session_bp, url_prefix="/api/v1")
+    app.register_blueprint(progress_bp, url_prefix="/api/v1")
+    app.register_blueprint(game_bp, url_prefix="/api/v1")
     from app.errors import register_error_handlers
     register_error_handlers(app)
     return app
