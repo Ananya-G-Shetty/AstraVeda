@@ -3,3 +3,21 @@ dist
 scratch
 .DS_Store
 *.local
+# --- Backend (Python / Flask) ---
+# Virtual environments (huge, and rebuilt from requirements.txt)
+venv/
+.venv/
+
+# Python build and cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets: database passwords and keys live here, never in Git
+.env
+.env.*
+!.env.example
+
+# Flask instance folder and logs
+instance/
+*.log
